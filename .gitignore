@@ -1,0 +1,5 @@
+.devcontainer/
+node_modules/
+
+agents/
+AGENTS.md
