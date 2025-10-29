@@ -109,6 +109,64 @@ global.__headerAuthPreprocessJoin = async ({ request, headerId, flagScope, flagK
 };
 `.trim();
 
+// Client-side helpers to hide credential fields once header auth is active.
+const uiHelpers = `
+const __headerAuthHideJoinCredentials = () => {
+  const form = document.querySelector("#join-form");
+  if (!form) return false;
+
+  const hideControl = (selector, labelSelector) => {
+    const input = form.querySelector(selector);
+    if (!input) return;
+
+    input.disabled = true;
+    input.removeAttribute("required");
+    input.style.display = "none";
+    input.setAttribute("aria-hidden", "true");
+
+    const label = labelSelector ? form.querySelector(labelSelector) : null;
+    if (label) {
+      label.style.display = "none";
+      label.setAttribute("aria-hidden", "true");
+    }
+
+    const group =
+      input.closest(".form-group") ??
+      input.closest(".form-fields") ??
+      input.parentElement;
+
+    if (group) {
+      group.style.display = "none";
+      group.setAttribute("aria-hidden", "true");
+    }
+  };
+
+  hideControl('select[name="userid"]', 'label[for="userid"]');
+  hideControl('input[name="password"]', 'label[for="password"]');
+
+  if (!form.querySelector("#header-auth-status")) {
+    const notice = document.createElement("p");
+    notice.id = "header-auth-status";
+    notice.className = "header-auth-status";
+    notice.textContent = "Signing you in...";
+    form.prepend(notice);
+  }
+
+  return true;
+};
+
+globalThis.__headerAuthAllowEmptySelection = async () => {
+  __headerAuthHideJoinCredentials();
+  return true;
+};
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", __headerAuthHideJoinCredentials, { once: true });
+} else {
+  __headerAuthHideJoinCredentials();
+}
+`.trim();
+
 // Server authentication patch set.
 patchSource({
   file: sessionsFile,
@@ -146,40 +204,7 @@ patchSource({
     },
     {
       label: "bypass user selection",
-      patch: `{
-  const __headerAuthHideLoginFields = () => {
-    const form = document.querySelector("#join-form");
-    if (!form) return;
-
-    const selectors = ["[name=\\"userid\\"]", "[name=\\"password\\"]"];
-    for (const selector of selectors) {
-      const input = form.querySelector(selector);
-      if (!input) continue;
-      const group = input.closest(".form-group") ?? input.closest(".form-fields") ?? input.parentElement;
-      if (group) group.style.display = "none";
-      input.setAttribute("aria-hidden", "true");
-    }
-
-    if (!form.querySelector("#header-auth-status")) {
-      const notice = document.createElement("p");
-      notice.id = "header-auth-status";
-      notice.className = "header-auth-status";
-      notice.textContent = "Signing you in...";
-      form.prepend(notice);
-    }
-  };
-
-  globalThis.__headerAuthAllowEmptySelection = async () => {
-    __headerAuthHideLoginFields();
-    return true;
-  };
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", __headerAuthHideLoginFields, { once: true });
-  } else {
-    __headerAuthHideLoginFields();
-  }
-}`
+      patch: uiHelpers
     }
   ]
 });
