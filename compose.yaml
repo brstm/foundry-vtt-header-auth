@@ -1,0 +1,18 @@
+services:
+  foundry:
+    image: felddy/foundryvtt:13
+    container_name: foundry-header-auth-test
+    ports:
+      - "30000:30000"
+    environment:
+      - CONTAINER_PATCH_URLS=https://raw.githubusercontent.com/brstm/foundry-vtt-header-auth/13.350/bootstrap-header-auth.sh
+      - HEADER_AUTH_ID=cf-access-authenticated-user-email
+      # Provide one of the following to actually install Foundry:
+      # - FOUNDRY_RELEASE_URL=<timed_url>
+      # or
+      # - FOUNDRY_USERNAME=<user>
+      # - FOUNDRY_PASSWORD=<pass>
+    volumes:
+      - type: bind
+        source: ./data
+        target: /data

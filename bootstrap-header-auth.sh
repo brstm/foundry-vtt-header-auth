@@ -10,7 +10,8 @@ set -euo pipefail
 BOOTSTRAP_REPO="brstm/foundry-vtt-header-auth"
 BOOTSTRAP_VERSION="${HEADER_AUTH_VERSION:-13.350}"
 BOOTSTRAP_ASSET="header-auth.tar.gz"
-DEST_DIR="/data/container_patches"
+# Allow overriding destination for testing by setting DEST_DIR
+DEST_DIR="${DEST_DIR:-/data/container_patches}"
 
 log() { echo "[bootstrap header-auth] $*"; }
 
@@ -34,4 +35,3 @@ log "installed to $DEST_DIR; executing header-auth.sh"
 "$DEST_DIR/header-auth.sh"
 
 log "done"
-
