@@ -146,7 +146,40 @@ patchSource({
     },
     {
       label: "bypass user selection",
-      patch: "globalThis.__headerAuthAllowEmptySelection = async () => true;"
+      patch: `{
+  const __headerAuthHideLoginFields = () => {
+    const form = document.querySelector("#join-form");
+    if (!form) return;
+
+    const selectors = ["[name=\\"userid\\"]", "[name=\\"password\\"]"];
+    for (const selector of selectors) {
+      const input = form.querySelector(selector);
+      if (!input) continue;
+      const group = input.closest(".form-group") ?? input.closest(".form-fields") ?? input.parentElement;
+      if (group) group.style.display = "none";
+      input.setAttribute("aria-hidden", "true");
+    }
+
+    if (!form.querySelector("#header-auth-status")) {
+      const notice = document.createElement("p");
+      notice.id = "header-auth-status";
+      notice.className = "header-auth-status";
+      notice.textContent = "Signing you in...";
+      form.prepend(notice);
+    }
+  };
+
+  globalThis.__headerAuthAllowEmptySelection = async () => {
+    __headerAuthHideLoginFields();
+    return true;
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", __headerAuthHideLoginFields, { once: true });
+  } else {
+    __headerAuthHideLoginFields();
+  }
+}`
     }
   ]
 });
