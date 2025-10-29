@@ -1,5 +1,5 @@
-.devcontainer/
 node_modules/
-
-agents/
-AGENTS.md
+.DS_Store
+.idea/
+.vscode/
+*.log
