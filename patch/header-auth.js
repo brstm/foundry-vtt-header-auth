@@ -135,7 +135,7 @@ global.__headerAuthPreprocessJoin = async ({ request, identifierKey, flagScope, 
 
   const uiHelpers = `
 const __headerAuthHideJoinCredentials = () => {
-  const form = document.querySelector("#join-form");
+  const form = document.querySelector("#join-game-form");
   if (!form) return false;
 
   const hideControl = (selector, labelSelector) => {
@@ -183,10 +183,20 @@ globalThis.__headerAuthAllowEmptySelection = async () => {
   return true;
 };
 
+const __headerAuthObserveJoinForm = () => {
+  if (__headerAuthHideJoinCredentials()) return;
+  if (!document.body) return;
+  const observer = new MutationObserver(() => {
+    if (__headerAuthHideJoinCredentials()) observer.disconnect();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  setTimeout(() => observer.disconnect(), 10000);
+};
+
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", __headerAuthHideJoinCredentials, { once: true });
+  document.addEventListener("DOMContentLoaded", __headerAuthObserveJoinForm, { once: true });
 } else {
-  __headerAuthHideJoinCredentials();
+  __headerAuthObserveJoinForm();
 }
 `.trim();
 
