@@ -167,14 +167,6 @@ const __headerAuthHideJoinCredentials = () => {
   hideControl('select[name="userid"]', 'label[for="userid"]');
   hideControl('input[name="password"]', 'label[for="password"]');
 
-  if (!form.querySelector("#header-auth-status")) {
-    const notice = document.createElement("p");
-    notice.id = "header-auth-status";
-    notice.className = "header-auth-status";
-    notice.textContent = "Signing you in...";
-    form.prepend(notice);
-  }
-
   return true;
 };
 
