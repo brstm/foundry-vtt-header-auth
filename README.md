@@ -4,28 +4,34 @@ A run-time patch for Foundry VTT that bypasses password login, allowing user log
 
 ## Install
 
-1) Copy these into your Foundry environment (or felddy’s `/data/container_patches/`):
-   - `header-auth.sh`
-   - `header-auth/patch-runner.js`
-   - `header-auth/server-patch.js`
-2) Make them executable: `chmod +x header-auth.sh header-auth/*.js`
-3) Set `HEADER_AUTH_ID` (e.g. for Cloudflare Access: `cf-access-authenticated-user-email`).
-4) Start Foundry. First run applies the patch; you’ll see `[ok] … inserted/updated` logs.
+### Felddy (Docker) quick start
 
-Note (felddy): the image runs patch scripts only during installation. To reapply later, run `./header-auth.sh` inside the container or recreate the container.
+1. Add `bootstrap.sh` to the container’s patch directory (default `/data/container_patches`).  
+   - You can also point Felddy at the script via `CONTAINER_PATCH_URLS=https://.../bootstrap.sh`; the image will download and run each URL.
+   - To move the patch directory elsewhere, set `CONTAINER_PATCHES=/custom/path` and place `bootstrap.sh` there.
+2. Ensure it’s executable: `chmod +x /data/container_patches/bootstrap.sh`.
+3. If you host the bundle yourself, set `PATCH_SOURCE_URL=file:///data/header-auth.tar.gz`; otherwise the script pulls from GitHub.
+4. Export `PATCH_HEADER_ID=cf-access-authenticated-user-email` (or your header of choice).
+5. Launch the container. During the first install you’ll see `[ok] … inserted/updated` in the entrypoint logs as the patch runs.
 
-## HEADER_AUTH_ID (Environment Variable)
+Felddy only runs patch scripts during the install phase. To rerun later, exec into the container and run `/data/container_patches/bootstrap.sh`, or recreate the container.
 
-- What it is: an environment variable available to the Foundry process. The patch reads it at runtime to know which upstream header to trust.
-- Name: `HEADER_AUTH_ID` (uppercase, literal).
-- Set it in whichever way you start Foundry:
-  - Docker Compose (felddy):
-    - `environment:` → `- HEADER_AUTH_ID=cf-access-authenticated-user-email`
-    - or add `HEADER_AUTH_ID=cf-access-authenticated-user-email` to your `.env` file used by Compose.
-  - Docker CLI: `docker run -e HEADER_AUTH_ID=cf-access-authenticated-user-email …`
-  - Bare metal: `export HEADER_AUTH_ID=cf-access-authenticated-user-email` before running `header-auth.sh` / starting Foundry.
+### Bare metal / other setups
 
-Note: this is not a Foundry world setting; it must be present in the environment where the Foundry server runs.
+1. Copy `bootstrap.sh` into the directory where you plan to run Foundry and make it executable.
+2. Optionally set `PATCH_SOURCE_URL` if you want to feed it a local tarball.
+3. Export `PATCH_HEADER_ID` and run `./bootstrap.sh` before starting Foundry (or wire it into your startup script).
+
+## PATCH_HEADER_ID (Environment Variable)
+
+- What it is: the header name the server should trust (for example Cloudflare Access’ `cf-access-authenticated-user-email`).
+- Name: `PATCH_HEADER_ID` (uppercase, literal). The patch skips itself if this variable is empty.
+- Set it however you launch Foundry:
+  - Docker Compose (felddy): add `PATCH_HEADER_ID=cf-access-authenticated-user-email` to your `.env` or `environment:` block.
+  - Docker CLI: `docker run -e PATCH_HEADER_ID=cf-access-authenticated-user-email …`
+  - Bare metal: `export PATCH_HEADER_ID=cf-access-authenticated-user-email` before running `bootstrap.sh` / starting Foundry.
+
+Note: this is not a Foundry world setting; it must be present in the process environment.
 
 ## How It Works
 
@@ -72,18 +78,29 @@ Run as a GM inside Foundry to assign each user’s external identifier (e.g., em
 
 The server compares the trusted header’s value to this flag (case‑insensitive).
 
-## Portability (Reuse This Code for Other Patches)
+**Optional overrides:**
 
-- Keep `header-auth.sh` and `header-auth/patch-runner.js` as‑is.
-- Change only `header-auth/server-patch.js`: define your patch operations with `{ label, remove?, patch }`.
-  - If `remove` exists, its text is replaced by a sentinel‑wrapped `patch`.
-  - If `remove` is omitted, the `patch` is appended (also sentinel‑wrapped).
+- `PATCH_VERSION` (default `latest`) – pin to a specific GitHub release tag.
+- `PATCH_SOURCE_URL` – override the download location entirely (e.g., `file:///data/header-auth.tar.gz`).
+- `PATCH_NAME` (default `header-auth`) – only change this if you publish a bundle under a different name.
+
+## Portability
+
+`bootstrap.sh` is intentionally generic: it downloads `<PATCH_NAME>.tar.gz`, unpacks it, and runs `exec.js` with the matching patch module. To adapt the pattern for another project, ship a release bundle that contains `exec.js` plus your patch module, update `PATCH_NAME`, and reuse the same script.
 
 ## Verify
 
-- Send `/join` with the trusted header → `{"status":"success","redirect":"/game"}`.
+- Fetch `/join` once to establish a session cookie, then POST with the trusted header:
+  ```bash
+  curl -s -c /tmp/cookies.txt http://localhost:30000/join >/dev/null
+  curl -i -b /tmp/cookies.txt -X POST http://localhost:30000/join \
+    -H "cf-access-authenticated-user-email: alice@example.com" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    --data "userid=&password=&action=join"
+  ```
+- Expected response: `{"request":"join","status":"success","message":"JOIN.LoginSuccess","redirect":"/game"}` and server logs showing `[header-auth] preprocess: matched user`.
 - Server logs include `[header-auth] preprocess: matched user`.
-- Search the install for `// header-auth begin:` to audit applied changes.
+- Search the install for your sentinel prefix (by default `// patch begin:`) to audit applied changes.
 
 ## Credits
 

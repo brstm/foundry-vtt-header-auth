@@ -17,7 +17,10 @@ jobs:
 
       - name: Build artifact
         run: |
-          tar -czf header-auth.tar.gz header-auth.sh header-auth
+          mkdir bundle
+          cp patch/exec.js bundle/exec.js
+          cp patch/header-auth.js bundle/header-auth.js
+          tar -czf header-auth.tar.gz -C bundle exec.js header-auth.js
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -26,4 +29,3 @@ jobs:
             header-auth.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

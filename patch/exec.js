@@ -1,11 +1,11 @@
-// patch-runner.js
-//  - owns the generic helpers used to apply sentinel-based patches
-//  - exported by server-patch.js so the actual patch list can stay separate
+#!/usr/bin/env node
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-// Ensure the target file exists before attempting to modify it.
+const SENTINEL = (process.env.PATCH_NAME || "").trim().replace(/[^A-Za-z0-9_-]/g, "-") || "patch";
+
 function fileExists(file) {
   if (!file) throw new Error("Expected file path to be defined.");
   if (!fs.existsSync(file)) {
@@ -15,20 +15,18 @@ function fileExists(file) {
   return true;
 }
 
-// Locate an existing sentinel-wrapped block.
 function buildMarkerPattern(marker) {
   const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`// header-auth begin: ${escaped}[\\s\\S]*?// header-auth end: ${escaped}`);
+  const prefix = SENTINEL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`// ${prefix} begin: ${escaped}[\\s\\S]*?// ${prefix} end: ${escaped}`);
 }
 
-// Wrap patch content in begin/end sentinel comments.
 function wrapWithMarker({ label, patch }) {
   if (!label) throw new Error("wrapWithMarker requires a label");
   if (!patch) throw new Error(`wrapWithMarker requires patch content for ${label}`);
-  return `// header-auth begin: ${label}\n${patch.trim()}\n// header-auth end: ${label}\n`;
+  return `// ${SENTINEL} begin: ${label}\n${patch.trim()}\n// ${SENTINEL} end: ${label}\n`;
 }
 
-// Apply each patch operation (replace or append) to the given file.
 export function patchSource({ file, operations }) {
   if (!fileExists(file)) return;
 
@@ -76,4 +74,36 @@ export function patchSource({ file, operations }) {
   } else {
     console.log(`[noop] ${path.basename(file)}: no changes needed`);
   }
+}
+
+export async function runPatchModule({ modulePath, context = {} }) {
+  const absoluteModulePath = path.resolve(modulePath);
+  const moduleUrl = pathToFileURL(absoluteModulePath).href;
+
+  const mod = await import(moduleUrl);
+  const runner = mod.default ?? mod.apply ?? mod.run ?? mod.patch;
+
+  if (typeof runner !== "function") {
+    throw new Error(`Patch module '${modulePath}' does not export a runnable function`);
+  }
+
+  await runner({ patchSource, context: { modulePath: absoluteModulePath, ...context } });
+}
+
+async function main(cliArgs) {
+  const [moduleArg] = cliArgs;
+  if (!moduleArg) {
+    throw new Error("Usage: node exec.js <patch-module>");
+  }
+
+  const modulePath = path.resolve(process.cwd(), moduleArg);
+  await runPatchModule({ modulePath, context: { workspace: process.cwd() } });
+}
+
+const isMainModule = fileURLToPath(import.meta.url) === process.argv[1];
+if (isMainModule) {
+  main(process.argv.slice(2)).catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
 }
